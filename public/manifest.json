@@ -1,0 +1,29 @@
+{
+  "name": "G0DM0D3",
+  "short_name": "G0DM0D3",
+  "description": "Multi-Model AI Chat Interface",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#0d0208",
+  "theme_color": "#00ff41",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "public/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png"
+    },
+    {
+      "src": "public/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "public/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

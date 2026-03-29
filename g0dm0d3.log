@@ -1,0 +1,96 @@
+127.0.0.1 - - [28/Mar/2026 00:48:24] "GET / HTTP/1.1" 200 -
+[godmode] WARNING: No API keys configured (GODMODE_API_KEYS / GODMODE_API_KEY). Auth is disabled — all requests will be allowed.
+
+  ╔══════════════════════════════════════════════════════════╗
+  ║  G0DM0D3 Research Preview API v0.4.0                     ║
+  ║  Listening on http://0.0.0.0:7860                       ║
+  ║                                                          ║
+  ║  TIERS:                                                  ║
+  ║  FREE        5 req total, 10/min, 50/day                ║
+  ║  PRO         unlimited, 60/min, 1000/day                ║
+  ║  ENTERPRISE  unlimited, 300/min, 10000/day              ║
+  ║                                                          ║
+  ║  FLAGSHIP:                                               ║
+  ║  POST /v1/ultraplinian/completions  Multi-model racing   ║
+  ║  POST /v1/consortium/completions    Hive-mind synthesis  ║
+  ║                                                          ║
+  ║  ENGINES (all tiers):                                    ║
+  ║  POST /v1/chat/completions     Single-model + GODMODE    ║
+  ║  POST /v1/autotune/analyze     Context analysis          ║
+  ║  POST /v1/parseltongue/encode  Text obfuscation          ║
+  ║  POST /v1/transform            STM transforms            ║
+  ║  POST /v1/feedback             Feedback loop             ║
+  ║                                                          ║
+  ║  GATED (Pro+):                                           ║
+  ║  GET  /v1/dataset/export       Export dataset             ║
+  ║  GET  /v1/research/stats       Published corpus stats    ║
+  ║  GET  /v1/research/batches     List HF batch files       ║
+  ║                                                          ║
+  ║  GATED (Enterprise):                                     ║
+  ║  GET  /v1/research/query       Query full corpus         ║
+  ║  GET  /v1/research/download    Download corpus (JSONL)   ║
+  ║  POST /v1/research/flush       Force-flush to HF         ║
+  ║  GET  /v1/metadata/events      Raw metadata event log    ║
+  ║                                                          ║
+  ║  TIER CHECK:                                             ║
+  ║  GET  /v1/tier                 Your tier + limits        ║
+  ║                                                          ║
+  ║  AUTO-PUBLISH: OFF (set HF_TOKEN + HF_DATASET_REPO to enable)║
+  ╚══════════════════════════════════════════════════════════╝
+  
+  ⚠  WARNING: No GODMODE_API_KEY or GODMODE_API_KEYS set — all routes are unauthenticated!
+  ⚠  WARNING: No GODMODE_TIER_KEYS set — all keys default to free tier
+  ⚠  WARNING: HF_TOKEN not set — auto-publish to HuggingFace is DISABLED
+[HF Publisher] Periodic flush SKIPPED — publisher not enabled (missing HF_TOKEN or HF_DATASET_REPO)
+127.0.0.1 - - [28/Mar/2026 00:53:26] code 501, message Unsupported method ('POST')
+127.0.0.1 - - [28/Mar/2026 00:53:26] "POST /api/telemetry HTTP/1.1" 501 -
+127.0.0.1 - - [28/Mar/2026 00:58:26] code 501, message Unsupported method ('POST')
+127.0.0.1 - - [28/Mar/2026 00:58:26] "POST /api/telemetry HTTP/1.1" 501 -
+127.0.0.1 - - [28/Mar/2026 01:07:00] "GET / HTTP/1.1" 200 -
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 46564)
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/lib/python3.13/socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/http/server.py", line 1338, in finish_request
+    self.RequestHandlerClass(request, client_address, self,
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             directory=args.directory)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/http/server.py", line 683, in __init__
+    super().__init__(*args, **kwargs)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/http/server.py", line 447, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/http/server.py", line 435, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/http/server.py", line 690, in do_GET
+    self.copyfile(f, self.wfile)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/http/server.py", line 892, in copyfile
+    shutil.copyfileobj(source, outputfile)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+    ~~~~~~~~~~^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.13/socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+127.0.0.1 - - [28/Mar/2026 01:08:31] code 501, message Unsupported method ('POST')
+127.0.0.1 - - [28/Mar/2026 01:08:31] "POST /api/telemetry HTTP/1.1" 501 -
+127.0.0.1 - - [28/Mar/2026 03:35:35] code 501, message Unsupported method ('POST')
+127.0.0.1 - - [28/Mar/2026 03:35:35] "POST /api/telemetry HTTP/1.1" 501 -
+127.0.0.1 - - [28/Mar/2026 03:44:59] code 501, message Unsupported method ('POST')
+127.0.0.1 - - [28/Mar/2026 03:44:59] "POST /api/telemetry HTTP/1.1" 501 -
+127.0.0.1 - - [28/Mar/2026 03:45:34] code 501, message Unsupported method ('POST')
+127.0.0.1 - - [28/Mar/2026 03:45:34] "POST /api/telemetry HTTP/1.1" 501 -
+127.0.0.1 - - [28/Mar/2026 03:51:00] "GET /public/manifest.json HTTP/1.1" 304 -
+127.0.0.1 - - [28/Mar/2026 03:51:00] "GET /public/icon-512.png HTTP/1.1" 304 -

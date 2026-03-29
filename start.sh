@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
-# ═══════════════════════════════════════════════
-#  G0DM0D3 — Robust Startup Script
-# ═══════════════════════════════════════════════
-# Usage:
-#   godmode              Start everything
-#   godmode stop          Kill running instances
-#   godmode status        Check if running
-#   godmode restart       Stop + start
-#   godmode --api-only    API server only
-#   godmode --frontend-only  Frontend only
-
-set -euo pipefail
+# ═══════════════════════════════════════════════════════
+#  G0DM0D3 — Bulletproof Startup
+# ═══════════════════════════════════════════════════════
+#  godmode            Start API + frontend + open browser
+#  godmode stop       Kill all G0DM0D3 processes
+#  godmode status     Show what's running
+#  godmode restart    Stop then start
+#  godmode open       Open browser to frontend
+#  godmode logs       Tail the log file
+# ═══════════════════════════════════════════════════════
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -18,24 +16,23 @@ cd "$SCRIPT_DIR"
 PIDFILE="$SCRIPT_DIR/.g0dm0d3.pids"
 LOGFILE="$SCRIPT_DIR/g0dm0d3.log"
 
-# Load environment
+# Load .env (skip comments, blank lines)
 if [ -f .env ]; then
-  set -a
-  source .env
-  set +a
+  while IFS='=' read -r key val; do
+    key="$(echo "$key" | xargs)"
+    [[ -z "$key" || "$key" == \#* ]] && continue
+    val="$(echo "$val" | xargs)"
+    export "$key=$val" 2>/dev/null || true
+  done < .env
 fi
 
 PORT="${PORT:-7860}"
 FRONTEND_PORT="${FRONTEND_PORT:-8000}"
 CORS_ORIGIN="${CORS_ORIGIN:-*}"
 
-# Colors
-R='\033[0;31m'
-G='\033[0;32m'
-C='\033[0;36m'
-Y='\033[1;33m'
-B='\033[1;37m'
-N='\033[0m'
+# ── Colors ────────────────────────────────────────────
+R='\033[0;31m' G='\033[0;32m' C='\033[0;36m'
+Y='\033[1;33m' B='\033[1;97m' N='\033[0m'
 
 banner() {
   echo -e "${G}"
@@ -50,200 +47,283 @@ ART
   echo -e "${N}"
 }
 
-is_port_in_use() {
+# ── Port / Process helpers ────────────────────────────
+port_pid() {
+  # Return PID listening on a port, or empty
   if command -v ss &>/dev/null; then
-    ss -tlnp 2>/dev/null | grep -q ":$1 " && return 0
-  elif command -v netstat &>/dev/null; then
-    netstat -tlnp 2>/dev/null | grep -q ":$1 " && return 0
+    ss -tlnp 2>/dev/null | grep ":$1 " | grep -oP 'pid=\K[0-9]+' | head -1
+  elif command -v lsof &>/dev/null; then
+    lsof -ti :"$1" 2>/dev/null | head -1
   else
-    # fallback: try connecting
-    (echo >/dev/tcp/127.0.0.1/$1) 2>/dev/null && return 0
+    echo ""
   fi
-  return 1
 }
 
-is_process_alive() {
-  kill -0 "$1" 2>/dev/null
+is_port_up() {
+  local pid
+  pid="$(port_pid "$1")"
+  [ -n "$pid" ]
 }
 
-stop_godmode() {
-  local found=0
+proc_alive() { kill -0 "$1" 2>/dev/null; }
+
+kill_port() {
+  local pid
+  pid="$(port_pid "$1")"
+  if [ -n "$pid" ]; then
+    kill "$pid" 2>/dev/null
+    # Wait up to 3s for clean exit
+    for _ in 1 2 3; do
+      proc_alive "$pid" || return 0
+      sleep 1
+    done
+    kill -9 "$pid" 2>/dev/null || true
+  fi
+}
+
+# ── Stop ──────────────────────────────────────────────
+do_stop() {
+  local killed=0
+
+  # Kill by PID file
   if [ -f "$PIDFILE" ]; then
     while IFS= read -r pid; do
-      if is_process_alive "$pid"; then
-        kill "$pid" 2>/dev/null && found=1
+      [ -z "$pid" ] && continue
+      if proc_alive "$pid"; then
+        kill "$pid" 2>/dev/null; killed=1
       fi
     done < "$PIDFILE"
     rm -f "$PIDFILE"
   fi
-  # Also sweep for any strays
-  pkill -f "tsx api/server.ts" 2>/dev/null && found=1 || true
-  pkill -f "http.server ${FRONTEND_PORT}" 2>/dev/null && found=1 || true
-  if [ "$found" -eq 1 ]; then
-    echo -e "${Y}G0DM0D3 stopped.${N}"
+
+  # Kill by port (catches orphans)
+  kill_port "$PORT" && killed=1
+  kill_port "$FRONTEND_PORT" && killed=1
+
+  # Sweep by process name (catches anything missed)
+  pkill -f "tsx.*api/server" 2>/dev/null && killed=1 || true
+  pkill -f "http\.server.*${FRONTEND_PORT}" 2>/dev/null && killed=1 || true
+
+  if [ "$killed" -eq 1 ]; then
+    sleep 1
+    echo -e "${G}G0DM0D3 stopped.${N}"
   else
-    echo -e "${Y}G0DM0D3 is not running.${N}"
+    echo -e "${Y}G0DM0D3 was not running.${N}"
   fi
 }
 
-status_godmode() {
+# ── Status ────────────────────────────────────────────
+do_status() {
   local api_up=0 fe_up=0
-  is_port_in_use "$PORT" && api_up=1
-  is_port_in_use "$FRONTEND_PORT" && fe_up=1
+
+  if is_port_up "$PORT"; then
+    api_up=1
+    echo -e "  ${G}API      ${C}http://localhost:${PORT}${N}  ${G}[RUNNING]${N}  pid=$(port_pid $PORT)"
+  else
+    echo -e "  ${R}API      port ${PORT}  [DOWN]${N}"
+  fi
+
+  if is_port_up "$FRONTEND_PORT"; then
+    fe_up=1
+    echo -e "  ${G}Frontend ${C}http://localhost:${FRONTEND_PORT}${N}  ${G}[RUNNING]${N}  pid=$(port_pid $FRONTEND_PORT)"
+  else
+    echo -e "  ${R}Frontend port ${FRONTEND_PORT}  [DOWN]${N}"
+  fi
 
   if [ "$api_up" -eq 1 ] && [ "$fe_up" -eq 1 ]; then
-    echo -e "${G}G0DM0D3 is running${N}"
-    echo -e "  API:      ${C}http://localhost:${PORT}${N} [UP]"
-    echo -e "  Frontend: ${C}http://localhost:${FRONTEND_PORT}${N} [UP]"
+    echo -e "\n  ${G}G0DM0D3 is fully operational.${N}"
     return 0
-  elif [ "$api_up" -eq 1 ]; then
-    echo -e "${Y}G0DM0D3 partially running${N}"
-    echo -e "  API:      ${C}http://localhost:${PORT}${N} [UP]"
-    echo -e "  Frontend: ${R}DOWN${N}"
-    return 1
-  elif [ "$fe_up" -eq 1 ]; then
-    echo -e "${Y}G0DM0D3 partially running${N}"
-    echo -e "  API:      ${R}DOWN${N}"
-    echo -e "  Frontend: ${C}http://localhost:${FRONTEND_PORT}${N} [UP]"
-    return 1
+  fi
+  return 1
+}
+
+# ── Open browser ──────────────────────────────────────
+do_open() {
+  local url="http://localhost:${FRONTEND_PORT}"
+  if command -v termux-open-url &>/dev/null; then
+    termux-open-url "$url"
+  elif command -v termux-open &>/dev/null; then
+    termux-open "$url"
+  elif command -v am &>/dev/null; then
+    am start -a android.intent.action.VIEW -d "$url" 2>/dev/null
+  elif command -v xdg-open &>/dev/null; then
+    xdg-open "$url"
   else
-    echo -e "${R}G0DM0D3 is not running.${N}"
-    return 1
+    echo -e "${Y}Open manually: ${C}${url}${N}"
+    return
+  fi
+  echo -e "${G}Browser opened: ${C}${url}${N}"
+}
+
+# ── Preflight checks ─────────────────────────────────
+preflight() {
+  local fail=0
+
+  if ! command -v node &>/dev/null; then
+    echo -e "${R}MISSING: Node.js — run: pkg install nodejs${N}"; fail=1
+  fi
+  if ! command -v python3 &>/dev/null; then
+    echo -e "${R}MISSING: Python3 — run: pkg install python${N}"; fail=1
+  fi
+  if ! command -v npx &>/dev/null; then
+    echo -e "${R}MISSING: npx — run: pkg install nodejs${N}"; fail=1
+  fi
+
+  [ "$fail" -eq 1 ] && exit 1
+
+  # Auto-install deps if missing
+  if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
+    echo -e "${Y}First run — installing dependencies...${N}"
+    npm install --no-audit --no-fund || {
+      echo -e "${R}npm install failed. Check network and try again.${N}"
+      exit 1
+    }
   fi
 }
 
-wait_for_port() {
-  local port=$1 name=$2 timeout=${3:-15}
-  local i=0
-  while [ $i -lt $timeout ]; do
-    if is_port_in_use "$port"; then
-      echo -e "  ${G}$name ready on port $port${N}"
+# ── Wait for port with timeout ───────────────────────
+wait_port() {
+  local port="$1" label="$2" secs="${3:-20}" i=0
+  while [ "$i" -lt "$secs" ]; do
+    if is_port_up "$port"; then
+      echo -e "  ${G}${label} ready${N}  port ${port}  (${i}s)"
       return 0
     fi
     sleep 1
     i=$((i + 1))
   done
-  echo -e "  ${R}$name failed to start on port $port (timeout ${timeout}s)${N}"
+  echo -e "  ${R}${label} FAILED to start on port ${port} after ${secs}s${N}"
+  echo -e "  ${Y}Check logs: tail -20 $LOGFILE${N}"
   return 1
 }
 
+# ── Watchdog: restart crashed children ────────────────
+watchdog() {
+  while true; do
+    sleep 10
+    # Check API
+    if [ -n "${API_PID:-}" ] && ! proc_alive "$API_PID"; then
+      echo -e "\n${Y}[watchdog] API crashed — restarting...${N}" | tee -a "$LOGFILE"
+      CORS_ORIGIN="$CORS_ORIGIN" npx tsx api/server.ts >> "$LOGFILE" 2>&1 &
+      API_PID=$!
+      echo "$API_PID" >> "$PIDFILE"
+    fi
+    # Check frontend
+    if [ -n "${FE_PID:-}" ] && ! proc_alive "$FE_PID"; then
+      echo -e "\n${Y}[watchdog] Frontend crashed — restarting...${N}" | tee -a "$LOGFILE"
+      python3 -m http.server "$FRONTEND_PORT" --bind 0.0.0.0 --directory "$SCRIPT_DIR" >> "$LOGFILE" 2>&1 &
+      FE_PID=$!
+      echo "$FE_PID" >> "$PIDFILE"
+    fi
+  done
+}
+
+# ── Cleanup on exit ───────────────────────────────────
 cleanup() {
   echo -e "\n${Y}Shutting down G0DM0D3...${N}"
-  stop_godmode
+  # Kill watchdog first
+  [ -n "${WATCHDOG_PID:-}" ] && kill "$WATCHDOG_PID" 2>/dev/null
+  [ -n "${API_PID:-}" ] && kill "$API_PID" 2>/dev/null
+  [ -n "${FE_PID:-}" ] && kill "$FE_PID" 2>/dev/null
+  rm -f "$PIDFILE"
+  echo -e "${G}G0DM0D3 stopped.${N}"
   exit 0
 }
-trap cleanup SIGINT SIGTERM
 
-start_godmode() {
-  local mode="${1:-all}"
+# ── Start ─────────────────────────────────────────────
+do_start() {
+  preflight
 
-  # Pre-flight checks
-  if ! command -v node &>/dev/null; then
-    echo -e "${R}Node.js required. Run: pkg install nodejs${N}"; exit 1
-  fi
-  if ! command -v python3 &>/dev/null; then
-    echo -e "${R}Python3 required. Run: pkg install python${N}"; exit 1
-  fi
-  if [ ! -d node_modules ]; then
-    echo -e "${Y}Installing dependencies...${N}"
-    npm install
-  fi
-
-  # Kill anything already on our ports
-  if is_port_in_use "$PORT" || is_port_in_use "$FRONTEND_PORT"; then
-    echo -e "${Y}Cleaning up previous instances...${N}"
-    stop_godmode
+  # Clean slate
+  if is_port_up "$PORT" || is_port_up "$FRONTEND_PORT"; then
+    echo -e "${Y}Previous instance detected — stopping...${N}"
+    do_stop
     sleep 1
   fi
 
   rm -f "$PIDFILE"
-  local pids=()
+  : > "$LOGFILE"  # truncate log
 
-  # Start API
-  if [ "$mode" != "--frontend-only" ]; then
-    echo -e "${C}Starting API server...${N}"
-    CORS_ORIGIN="$CORS_ORIGIN" npx tsx api/server.ts >> "$LOGFILE" 2>&1 &
-    local api_pid=$!
-    pids+=("$api_pid")
-    echo "$api_pid" >> "$PIDFILE"
-  fi
+  trap cleanup SIGINT SIGTERM EXIT
 
-  # Start frontend
-  if [ "$mode" != "--api-only" ]; then
-    echo -e "${C}Starting frontend...${N}"
-    python3 -m http.server "$FRONTEND_PORT" --bind 0.0.0.0 >> "$LOGFILE" 2>&1 &
-    local fe_pid=$!
-    pids+=("$fe_pid")
-    echo "$fe_pid" >> "$PIDFILE"
-  fi
+  # ── Launch API ──
+  echo -e "${C}Starting API server (port ${PORT})...${N}"
+  CORS_ORIGIN="$CORS_ORIGIN" npx tsx api/server.ts >> "$LOGFILE" 2>&1 &
+  API_PID=$!
+  echo "$API_PID" >> "$PIDFILE"
 
-  # Wait for ports to come alive
+  # ── Launch Frontend ──
+  echo -e "${C}Starting frontend (port ${FRONTEND_PORT})...${N}"
+  python3 -m http.server "$FRONTEND_PORT" --bind 0.0.0.0 --directory "$SCRIPT_DIR" >> "$LOGFILE" 2>&1 &
+  FE_PID=$!
+  echo "$FE_PID" >> "$PIDFILE"
+
+  # ── Wait for both ──
   echo -e "${B}Waiting for services...${N}"
   local ok=1
-  if [ "$mode" != "--frontend-only" ]; then
-    wait_for_port "$PORT" "API" 15 || ok=0
-  fi
-  if [ "$mode" != "--api-only" ]; then
-    wait_for_port "$FRONTEND_PORT" "Frontend" 10 || ok=0
-  fi
+  wait_port "$FRONTEND_PORT" "Frontend" 10 || ok=0
+  wait_port "$PORT" "API" 20 || ok=0
 
   if [ "$ok" -eq 0 ]; then
-    echo -e "${R}Some services failed to start. Check $LOGFILE${N}"
-    return 1
+    echo -e "${R}Startup failed. Last 20 lines of log:${N}"
+    tail -20 "$LOGFILE"
+    cleanup
   fi
 
-  # Health check
-  if [ "$mode" != "--frontend-only" ]; then
-    local health
-    health=$(curl -s http://localhost:${PORT}/v1/health 2>/dev/null || echo '{"status":"error"}')
-    if echo "$health" | grep -q '"ok"'; then
-      echo -e "  ${G}API health check passed${N}"
-    else
-      echo -e "  ${R}API health check failed${N}"
-    fi
+  # ── API health check ──
+  local health
+  health="$(curl -sf http://localhost:${PORT}/v1/health 2>/dev/null || echo '{}')"
+  if echo "$health" | grep -q '"ok"'; then
+    echo -e "  ${G}API health check PASSED${N}"
+  else
+    echo -e "  ${Y}API health check inconclusive (may still be warming up)${N}"
   fi
 
+  # ── Launch watchdog ──
+  watchdog &
+  WATCHDOG_PID=$!
+
+  # ── Ready ──
   echo ""
-  echo -e "${G}=== G0DM0D3 IS LIVE ===${N}"
-  if [ "$mode" != "--api-only" ]; then
-    echo -e "  ${B}Open in browser:${N} ${C}http://localhost:${FRONTEND_PORT}${N}"
-  fi
-  if [ "$mode" != "--frontend-only" ]; then
-    echo -e "  ${B}API endpoint:${N}   ${C}http://localhost:${PORT}/v1/info${N}"
-  fi
+  echo -e "${G}══════════════════════════════════════${N}"
+  echo -e "${G}  G0DM0D3 IS LIVE${N}"
+  echo -e "${G}══════════════════════════════════════${N}"
+  echo -e "  ${B}Browser:${N}  ${C}http://localhost:${FRONTEND_PORT}${N}"
+  echo -e "  ${B}API:${N}      ${C}http://localhost:${PORT}/v1/info${N}"
+  echo -e "  ${B}Logs:${N}     tail -f ~/G0DM0D3/g0dm0d3.log"
+  echo -e "  ${B}Stop:${N}     godmode stop  ${Y}(from another terminal)${N}"
+
   if [ -z "${OPENROUTER_API_KEY:-}" ]; then
     echo ""
-    echo -e "  ${Y}Paste your OpenRouter API key in the browser UI${N}"
-    echo -e "  ${Y}or set OPENROUTER_API_KEY in ~/G0DM0D3/.env${N}"
+    echo -e "  ${Y}No OPENROUTER_API_KEY in .env${N}"
+    echo -e "  ${Y}Enter your key in the browser settings.${N}"
   fi
   echo ""
-  echo -e "  ${C}Logs:${N} tail -f $LOGFILE"
-  echo -e "  ${C}Stop:${N} godmode stop"
-  echo ""
-  echo -e "${C}Press Ctrl+C to stop, or run 'godmode stop' from another terminal.${N}"
 
+  # Auto-open browser
+  do_open 2>/dev/null
+
+  echo -e "${C}Ctrl+C to stop.${N}"
+  echo ""
+
+  # Block forever — wait on children
   wait
 }
 
-# ── Main ──────────────────────────────────────
+# ═════════════════════════════════════════════════════
+#  MAIN
+# ═════════════════════════════════════════════════════
 banner
 
 case "${1:-start}" in
-  stop)
-    stop_godmode
-    ;;
-  status)
-    status_godmode
-    ;;
-  restart)
-    stop_godmode
-    sleep 2
-    start_godmode "${2:---all}"
-    ;;
-  start|--api-only|--frontend-only)
-    start_godmode "${1:-start}"
-    ;;
+  stop)       do_stop ;;
+  status)     do_status ;;
+  restart)    do_stop; sleep 2; do_start ;;
+  open)       do_open ;;
+  logs)       tail -f "$LOGFILE" ;;
+  start|"")   do_start ;;
   *)
-    start_godmode "start"
+    echo "Usage: godmode [start|stop|status|restart|open|logs]"
+    exit 1
     ;;
 esac
